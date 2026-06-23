@@ -16,6 +16,7 @@ import Images
 @MainActor protocol DetailWebViewControllerDelegate: AnyObject {
 	func mouseDidEnter(_: DetailWebViewController, link: String)
 	func mouseDidExit(_: DetailWebViewController)
+	func openInAppBrowser(_: DetailWebViewController, url: URL)
 }
 
 final class DetailWebViewController: NSViewController {
@@ -205,7 +206,12 @@ extension DetailWebViewController: WKNavigationDelegate, WKUIDelegate {
 	func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
 		if navigationAction.navigationType == .linkActivated {
 			if let url = navigationAction.request.url {
-				self.openInBrowser(url, flags: navigationAction.modifierFlags)
+				switch LinkOpenDecider.destination(for: url, modifierFlags: navigationAction.modifierFlags) {
+				case .inAppBrowser:
+					delegate?.openInAppBrowser(self, url: url)
+				case .externalBrowser:
+					self.openInBrowser(url, flags: navigationAction.modifierFlags)
+				}
 			}
 			decisionHandler(.cancel)
 			return
@@ -247,7 +253,12 @@ extension DetailWebViewController: WKNavigationDelegate, WKUIDelegate {
 		// or on the "Watch in YouTube" button. For our purposes we'll handle such window.open calls the same way we
 		// handle clicks on a URL.
 		if let url = navigationAction.request.url {
-			self.openInBrowser(url, flags: navigationAction.modifierFlags)
+			switch LinkOpenDecider.destination(for: url, modifierFlags: navigationAction.modifierFlags) {
+			case .inAppBrowser:
+				delegate?.openInAppBrowser(self, url: url)
+			case .externalBrowser:
+				self.openInBrowser(url, flags: navigationAction.modifierFlags)
+			}
 		}
 
 		return nil

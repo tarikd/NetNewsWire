@@ -28,6 +28,14 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 	private lazy var regularWebViewController = createWebViewController()
 	private var searchWebViewController: DetailWebViewController?
 
+	private lazy var browserViewController: DetailBrowserViewController = {
+		let controller = DetailBrowserViewController()
+		controller.delegate = self
+		return controller
+	}()
+
+	private var isShowingBrowser = false
+
 	var windowState: DetailWindowState {
 		currentWebViewController.windowState
 	}
@@ -75,6 +83,7 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 	// MARK: - API
 
 	func setState(_ state: DetailState, mode: TimelineSourceMode) {
+		dismissBrowserIfNeeded()
 		switch mode {
 		case .regular:
 			detailStateForRegular = state
@@ -84,6 +93,7 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 	}
 
 	func showDetail(for mode: TimelineSourceMode) {
+		dismissBrowserIfNeeded()
 		currentSourceMode = mode
 	}
 
@@ -134,11 +144,43 @@ extension DetailViewController: DetailWebViewControllerDelegate {
 		}
 		statusBarView.mouseoverLink = nil
 	}
+
+	func openInAppBrowser(_ detailWebViewController: DetailWebViewController, url: URL) {
+		guard detailWebViewController === currentWebViewController else {
+			return
+		}
+		statusBarView.mouseoverLink = nil
+		browserViewController.load(url)
+		containerView.contentView = browserViewController.view
+		isShowingBrowser = true
+
+		// Focusing the web view puts the browser VC in the responder chain so Esc (cancelOperation) returns to the article.
+		browserViewController.focusWebView()
+	}
+}
+
+// MARK: - DetailBrowserViewControllerDelegate
+
+extension DetailViewController: DetailBrowserViewControllerDelegate {
+
+	func detailBrowserViewControllerDidRequestArticle(_ controller: DetailBrowserViewController) {
+		dismissBrowserIfNeeded()
+		focus()
+	}
 }
 
 // MARK: - Private
 
 private extension DetailViewController {
+
+	func dismissBrowserIfNeeded() {
+		guard isShowingBrowser else {
+			return
+		}
+		isShowingBrowser = false
+		browserViewController.stopMediaPlayback()
+		containerView.contentView = currentWebViewController.view
+	}
 
 	func createWebViewController() -> DetailWebViewController {
 		let controller = DetailWebViewController()
@@ -167,6 +209,7 @@ private extension DetailViewController {
 	}
 
 	func createNewWebViewsAndRestoreState() {
+		dismissBrowserIfNeeded()
 
 		regularWebViewController = createWebViewController()
 		currentWebViewController = regularWebViewController

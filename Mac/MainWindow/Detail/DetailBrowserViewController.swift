@@ -73,6 +73,10 @@ final class DetailBrowserViewController: NSViewController {
 		webView.evaluateJavaScript("document.querySelectorAll('video,audio').forEach(m => m.pause());", completionHandler: nil)
 	}
 
+	func focusWebView() {
+		view.window?.makeFirstResponder(webView)
+	}
+
 	// MARK: - Actions
 
 	@objc private func goToArticle(_ sender: Any?) {
