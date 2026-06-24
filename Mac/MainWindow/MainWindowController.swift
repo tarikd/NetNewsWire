@@ -286,7 +286,7 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 		}
 
 		if item.action == #selector(moveFocusToSearchField(_:)) {
-			return currentSearchField != nil
+			return currentSearchField != nil && !(detailViewController?.isBrowsing ?? false)
 		}
 
 		if item.action == #selector(cleanUp(_:)) {
@@ -561,6 +561,7 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 	}
 
 	@IBAction func moveFocusToSearchField(_ sender: Any?) {
+		guard !(detailViewController?.isBrowsing ?? false) else { return }
 		guard let searchField = currentSearchField else {
 			return
 		}

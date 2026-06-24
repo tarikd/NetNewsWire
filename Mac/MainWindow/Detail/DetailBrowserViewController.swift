@@ -32,7 +32,6 @@ final class DetailBrowserViewController: NSViewController {
 
 	var canGoBack: Bool { webView?.canGoBack ?? false }
 	var canGoForward: Bool { webView?.canGoForward ?? false }
-	var currentURL: URL? { webView?.url }
 
 	override func loadView() {
 		let configuration = WKWebViewConfiguration()
