@@ -49,8 +49,10 @@ public enum ArticleExtractorState: Sendable {
 		state = .processing
 
 		let configuration = WKWebViewConfiguration()
-		// Extraction shouldn't read or write the app's shared cookie store.
-		configuration.websiteDataStore = .nonPersistent()
+		// Use the app's shared, persistent cookie store so a logged-in session
+		// (e.g. a paywall login made in the in-app browser) carries into
+		// extraction and Readability sees the full article, not the free sample.
+		configuration.websiteDataStore = .default()
 		let userScript = WKUserScript(source: ReadabilityResource.javaScript,
 									  injectionTime: .atDocumentEnd,
 									  forMainFrameOnly: true)
