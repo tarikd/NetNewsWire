@@ -48,16 +48,13 @@ jobs:
           CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
           CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-          AC_API_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
+          PROFILE_APP: ${{ secrets.APPLE_PROFILE_APP }}
+          PROFILE_SHARE: ${{ secrets.APPLE_PROFILE_SHARE }}
+          PROFILE_SAFARI: ${{ secrets.APPLE_PROFILE_SAFARI }}
         run: |
           set -euo pipefail
           KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
           CERT_PATH="$RUNNER_TEMP/developer_id.p12"
-          API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
-
-          # App Store Connect API key — used for both provisioning and notarization.
-          echo "$AC_API_KEY_P8" | base64 --decode > "$API_KEY_PATH"
-          echo "AC_API_KEY_PATH=$API_KEY_PATH" >> "$GITHUB_ENV"
 
           # Developer ID certificate into a temporary keychain.
           echo "$CERT_P12" | base64 --decode > "$CERT_PATH"
@@ -71,64 +68,47 @@ jobs:
 
           IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.+)"$/\1/')
           if [ -z "$IDENTITY" ]; then echo "No Developer ID Application identity found"; exit 1; fi
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
           echo "Using identity: $IDENTITY"
           rm -f "$CERT_PATH"
 
-      - name: Archive (Developer ID)
+          # Install the Developer ID provisioning profiles. xcodebuild matches
+          # each target to its profile by bundle id from this directory.
+          DEST="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$DEST"
+          install_profile() {
+            local b64="$1" tmp="$RUNNER_TEMP/profile.provisionprofile"
+            echo "$b64" | base64 --decode > "$tmp"
+            local uuid
+            uuid=$(security cms -D -i "$tmp" | plutil -extract UUID raw -)
+            cp "$tmp" "$DEST/$uuid.provisionprofile"
+            echo "Installed profile $uuid"
+          }
+          install_profile "$PROFILE_APP"
+          install_profile "$PROFILE_SHARE"
+          install_profile "$PROFILE_SAFARI"
+
+      - name: Build (Developer ID, hardened runtime)
         if: env.SIGNED == 'true'
-        env:
-          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
-          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
         shell: bash
         run: |
           set -euo pipefail
-          xcodebuild archive \
+          xcodebuild build \
             -project NetNewsWire.xcodeproj \
             -scheme NetNewsWire \
             -configuration Release \
+            -derivedDataPath build \
             -destination 'generic/platform=macOS' \
-            -archivePath "$RUNNER_TEMP/NetNewsWire.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$AC_API_KEY_PATH" \
-            -authenticationKeyID "$AC_API_KEY_ID" \
-            -authenticationKeyIssuerID "$AC_API_ISSUER_ID" \
+            DEVELOPER_ENTITLEMENTS=-dev \
             ORGANIZATION_IDENTIFIER="${{ secrets.ORGANIZATION_IDENTIFIER }}" \
-            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
             ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
             ENABLE_HARDENED_RUNTIME=YES \
             OTHER_CODE_SIGN_FLAGS=--timestamp \
             | xcbeautify --renderer github-actions
-
-      - name: Export (Developer ID) and notarize
-        if: env.SIGNED == 'true'
-        env:
-          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
-          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key><string>developer-id</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
-          </dict>
-          </plist>
-          PLIST
-
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/NetNewsWire.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$AC_API_KEY_PATH" \
-            -authenticationKeyID "$AC_API_KEY_ID" \
-            -authenticationKeyIssuerID "$AC_API_ISSUER_ID"
-
-          echo "APP_PATH=$RUNNER_TEMP/export/NetNewsWire.app" >> "$GITHUB_ENV"
+          echo "APP_PATH=build/Build/Products/Release/NetNewsWire.app" >> "$GITHUB_ENV"
 
       - name: Build (ad-hoc, unsigned fallback)
         if: env.SIGNED != 'true'
@@ -175,27 +155,31 @@ jobs:
         env:
           AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
           AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+          AC_API_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
         shell: bash
         run: |
           set -euo pipefail
           DMG="${{ steps.dmg.outputs.path }}"
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          echo "$AC_API_KEY_P8" | base64 --decode > "$KEY"
 
           SUBMIT=$(xcrun notarytool submit "$DMG" \
-            --key "$AC_API_KEY_PATH" --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" \
+            --key "$KEY" --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" \
             --output-format json)
           echo "$SUBMIT"
           ID=$(echo "$SUBMIT" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
 
           xcrun notarytool wait "$ID" \
-            --key "$AC_API_KEY_PATH" --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" --timeout 30m || true
+            --key "$KEY" --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" --timeout 30m || true
 
           # Always print the notary log so failures are diagnosable.
           xcrun notarytool log "$ID" \
-            --key "$AC_API_KEY_PATH" --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" || true
+            --key "$KEY" --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" || true
 
           STATUS=$(xcrun notarytool info "$ID" \
-            --key "$AC_API_KEY_PATH" --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" \
+            --key "$KEY" --key-id "$AC_API_KEY_ID" --issuer "$AC_API_ISSUER_ID" \
             --output-format json | python3 -c 'import sys,json;print(json.load(sys.stdin)["status"])')
+          rm -f "$KEY"
           if [ "$STATUS" != "Accepted" ]; then
             echo "Notarization status: $STATUS"
             exit 1
