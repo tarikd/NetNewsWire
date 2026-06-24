@@ -1,0 +1,106 @@
+name: Release DMG
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-dmg:
+    name: Build DMG
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Generate Secrets Sources
+        run: PROJECT_DIR="$GITHUB_WORKSPACE" ./buildscripts/updateSecrets.sh
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the Mac app (unsigned, Release)
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project NetNewsWire.xcodeproj \
+            -scheme NetNewsWire \
+            -configuration Release \
+            -xcconfig .github/macos-ci-no-signing.xcconfig \
+            -derivedDataPath build \
+            -destination 'generic/platform=macOS' \
+            DEVELOPER_ENTITLEMENTS=-dev \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+
+      - name: Ad-hoc sign the app
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release/NetNewsWire.app"
+          # Ad-hoc signature so the app runs locally without a "damaged" error.
+          # (Not Developer ID / notarized — Gatekeeper still warns on download.)
+          codesign --force --deep --sign - "$APP"
+
+      - name: Create the DMG
+        id: dmg
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release/NetNewsWire.app"
+          NAME="NetNewsWire-Reeder-Style-${{ steps.version.outputs.version }}.dmg"
+
+          # Build the DMG with hdiutil (no Finder/AppleScript, so it's reliable in CI):
+          # a staging folder with the app and an /Applications symlink for drag-to-install.
+          STAGE="$(mktemp -d)/dmg"
+          mkdir -p "$STAGE"
+          cp -R "$APP" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "NetNewsWire — Reeder Style" \
+            -srcfolder "$STAGE" -ov -format UDZO "$NAME"
+
+          echo "path=$NAME" >> "$GITHUB_OUTPUT"
+          echo "Built $NAME"
+
+      - name: Upload DMG artifact (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetNewsWire-Reeder-Style-dmg
+          path: ${{ steps.dmg.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish release (tag builds)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.dmg.outputs.path }}
+          generate_release_notes: true
+          body: |
+            **NetNewsWire — Reeder Style** ${{ steps.version.outputs.version }}
+
+            This is an unsigned, un-notarized build. On first launch macOS Gatekeeper
+            will warn that the developer can't be verified — **right-click the app and
+            choose Open**, then confirm. (Or run
+            `xattr -dr com.apple.quarantine /Applications/NetNewsWire.app` once.)
