@@ -38,29 +38,31 @@ jobs:
             echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build the Mac app (unsigned, Release)
+      - name: Build the Mac app (ad-hoc signed, Release)
         shell: bash
         run: |
           set -euo pipefail
+          # Ad-hoc sign (identity "-") rather than disabling signing: the Release
+          # config has run-script phases that re-sign Sparkle and the share
+          # extension with $EXPANDED_CODE_SIGN_IDENTITY, which is empty (and fails)
+          # when CODE_SIGNING_ALLOWED=NO. Ad-hoc signing satisfies them while still
+          # producing a non-Developer-ID, un-notarized build. Use the -dev
+          # entitlements (no sandbox / iCloud) so no provisioning is needed.
           xcodebuild build \
             -project NetNewsWire.xcodeproj \
             -scheme NetNewsWire \
             -configuration Release \
-            -xcconfig .github/macos-ci-no-signing.xcconfig \
             -derivedDataPath build \
             -destination 'generic/platform=macOS' \
             DEVELOPER_ENTITLEMENTS=-dev \
             ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
             | xcbeautify --renderer github-actions
-
-      - name: Ad-hoc sign the app
-        run: |
-          set -euo pipefail
-          APP="build/Build/Products/Release/NetNewsWire.app"
-          # Ad-hoc signature so the app runs locally without a "damaged" error.
-          # (Not Developer ID / notarized — Gatekeeper still warns on download.)
-          codesign --force --deep --sign - "$APP"
 
       - name: Create the DMG
         id: dmg
