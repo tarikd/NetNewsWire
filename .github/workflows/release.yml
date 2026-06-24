@@ -72,8 +72,10 @@ jobs:
           echo "Using identity: $IDENTITY"
           rm -f "$CERT_PATH"
 
-          # Install the Developer ID provisioning profiles. xcodebuild matches
-          # each target to its profile by bundle id from this directory.
+          # Install the Developer ID provisioning profiles and capture each
+          # profile's UUID. Manual signing needs an explicit specifier per
+          # target — the command line only accepts one global value, so we pin
+          # each target to its profile through that target's xcconfig below.
           DEST="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$DEST"
           install_profile() {
@@ -82,11 +84,16 @@ jobs:
             local uuid
             uuid=$(security cms -D -i "$tmp" | plutil -extract UUID raw -)
             cp "$tmp" "$DEST/$uuid.provisionprofile"
-            echo "Installed profile $uuid"
+            echo "$uuid"
           }
-          install_profile "$PROFILE_APP"
-          install_profile "$PROFILE_SHARE"
-          install_profile "$PROFILE_SAFARI"
+          UUID_APP=$(install_profile "$PROFILE_APP")
+          UUID_SHARE=$(install_profile "$PROFILE_SHARE")
+          UUID_SAFARI=$(install_profile "$PROFILE_SAFARI")
+          echo "Installed profiles — app=$UUID_APP share=$UUID_SHARE safari=$UUID_SAFARI"
+
+          printf '\nPROVISIONING_PROFILE_SPECIFIER = %s\n' "$UUID_APP"   >> xcconfig/NetNewsWire_macapp_target.xcconfig
+          printf '\nPROVISIONING_PROFILE_SPECIFIER = %s\n' "$UUID_SHARE" >> xcconfig/NetNewsWire_shareextension_target.xcconfig
+          printf '\nPROVISIONING_PROFILE_SPECIFIER = %s\n' "$UUID_SAFARI" >> xcconfig/NetNewsWire_safariextension_target.xcconfig
 
       - name: Build (Developer ID, hardened runtime)
         if: env.SIGNED == 'true'
