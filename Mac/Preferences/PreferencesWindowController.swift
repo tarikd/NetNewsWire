@@ -25,6 +25,7 @@ private struct ToolbarItemIdentifier {
 	static let General = "General"
 	static let Accounts = "Accounts"
 	static let Advanced = "Advanced"
+	static let Keyboard = "Keyboard"
 }
 
 final class PreferencesWindowController: NSWindowController, NSToolbarDelegate {
@@ -42,6 +43,9 @@ final class PreferencesWindowController: NSWindowController, NSToolbarDelegate {
 		specs += [PreferencesToolbarItemSpec(identifierRawValue: ToolbarItemIdentifier.Advanced,
 											 name: NSLocalizedString("Advanced", comment: "Preferences"),
 											 image: Assets.Images.preferencesToolbarAdvanced)]
+		specs += [PreferencesToolbarItemSpec(identifierRawValue: ToolbarItemIdentifier.Keyboard,
+											 name: NSLocalizedString("Keyboard", comment: "Preferences"),
+											 image: NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keyboard"))]
 		return specs
 	}()
 
@@ -150,6 +154,12 @@ private extension PreferencesWindowController {
 	func viewController(identifier: String) -> NSViewController? {
 		if let cachedViewController = viewControllers[identifier] {
 			return cachedViewController
+		}
+
+		if identifier == ToolbarItemIdentifier.Keyboard {
+			let keyboardViewController = KeyboardPreferencesViewController()
+			viewControllers[identifier] = keyboardViewController
+			return keyboardViewController
 		}
 
 		let storyboard = NSStoryboard(name: NSStoryboard.Name("Preferences"), bundle: nil)
