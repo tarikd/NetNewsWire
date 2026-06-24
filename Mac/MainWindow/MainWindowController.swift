@@ -429,6 +429,16 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 		}
 	}
 
+	@IBAction func goToPreviousUnread(_ sender: Any?) {
+		guard let timelineViewController = currentTimelineViewController else {
+			return
+		}
+		NSCursor.setHiddenUntilMouseMoves(true)
+		if timelineViewController.canGoToPreviousUnread() {
+			timelineViewController.goToPreviousUnread()
+		}
+	}
+
 	@IBAction func markAllAsRead(_ sender: Any?) {
 		currentTimelineViewController?.markAllAsRead()
 	}

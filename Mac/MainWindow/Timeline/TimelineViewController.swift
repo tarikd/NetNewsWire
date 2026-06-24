@@ -637,6 +637,23 @@ final class TimelineViewController: NSViewController, UndoableCommandRunner, Unr
 		return articles.rowOfNextUnreadArticle(tableView.selectedRow, wrappingToTop: wrapping)
 	}
 
+	func goToPreviousUnread() {
+		guard let ix = indexOfPreviousUnreadArticle() else {
+			return
+		}
+		NSCursor.setHiddenUntilMouseMoves(true)
+		tableView.selectRow(ix)
+		tableView.scrollTo(row: ix)
+	}
+
+	func canGoToPreviousUnread() -> Bool {
+		return indexOfPreviousUnreadArticle() != nil
+	}
+
+	func indexOfPreviousUnreadArticle() -> Int? {
+		return articles.rowOfPreviousUnreadArticle(tableView.selectedRow)
+	}
+
 	func focus() {
 		guard let window = tableView.window else {
 			return

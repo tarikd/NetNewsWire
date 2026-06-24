@@ -12,17 +12,6 @@ import RSCore
 @objc final class SidebarKeyboardDelegate: NSObject, KeyboardDelegate {
 
 	@IBOutlet var sidebarViewController: SidebarViewController?
-	let shortcuts: Set<KeyboardShortcut>
-
-	override init() {
-
-		let f = Bundle.main.path(forResource: "SidebarKeyboardShortcuts", ofType: "plist")!
-		let rawShortcuts = NSArray(contentsOfFile: f)! as! [[String: Any]]
-
-		self.shortcuts = Set(rawShortcuts.compactMap { KeyboardShortcut(dictionary: $0) })
-
-		super.init()
-	}
 
 	func keydown(_ event: NSEvent, in view: NSView) -> Bool {
 
@@ -31,6 +20,7 @@ import RSCore
 		}
 
 		let key = KeyboardKey(with: event)
+		let shortcuts = KeyboardShortcutStore.shared.effectiveShortcuts(for: .sidebar)
 		guard let matchingShortcut = KeyboardShortcut.findMatchingShortcut(in: shortcuts, key: key) else {
 			return false
 		}

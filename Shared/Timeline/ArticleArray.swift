@@ -48,6 +48,22 @@ typealias ArticleArray = [Article]
 		return nil
 	}
 
+	func rowOfPreviousUnreadArticle(_ selectedRow: Int) -> Int? {
+		if isEmpty {
+			return nil
+		}
+		let startIndex = Swift.min(selectedRow, count) - 1
+		if startIndex < 0 {
+			return nil
+		}
+		for rowIndex in stride(from: startIndex, through: 0, by: -1) {
+			if let article = articleAtRow(rowIndex), !article.status.read {
+				return rowIndex
+			}
+		}
+		return nil
+	}
+
 	func articlesForIndexes(_ indexes: IndexSet) -> [Article] {
 		return indexes.compactMap { (oneIndex) -> Article? in
 			return articleAtRow(oneIndex)

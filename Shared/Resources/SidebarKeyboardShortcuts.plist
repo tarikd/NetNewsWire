@@ -3,6 +3,8 @@
 <plist version="1.0">
 <array>
 	<dict>
+		<key>title</key>
+		<string>Go to Timeline</string>
 		<key>key</key>
 		<string>[tab]</string>
 		<key>action</key>
@@ -10,7 +12,7 @@
 	</dict>
 	<dict>
 		<key>title</key>
-		<string>Collapse Selected Row</string>
+		<string>Collapse Selected</string>
 		<key>key</key>
 		<string>,</string>
 		<key>action</key>
@@ -18,7 +20,7 @@
 	</dict>
 	<dict>
 		<key>title</key>
-		<string>Expand Selected Row</string>
+		<string>Expand Selected</string>
 		<key>key</key>
 		<string>.</string>
 		<key>action</key>
@@ -33,6 +35,8 @@
 		<string>collapseAllExceptForGroupItems:</string>
 	</dict>
 	<dict>
+		<key>title</key>
+		<string>Collapse All</string>
 		<key>key</key>
 		<string>[leftarrow]</string>
 		<key>action</key>
@@ -51,6 +55,8 @@
 		<string>expandAll:</string>
 	</dict>
 	<dict>
+		<key>title</key>
+		<string>Expand All</string>
 		<key>key</key>
 		<string>[rightarrow]</string>
 		<key>action</key>
@@ -62,7 +68,7 @@
 	</dict>
 	<dict>
 		<key>title</key>
-		<string>Navigate to Timeline</string>
+		<string>Go to Timeline</string>
 		<key>key</key>
 		<string>[rightarrow]</string>
 		<key>action</key>
@@ -70,13 +76,15 @@
 	</dict>
 	<dict>
 		<key>title</key>
-		<string>Delete</string>
+		<string>Delete Feed</string>
 		<key>key</key>
 		<string>[delete]</string>
 		<key>action</key>
 		<string>delete:</string>
 	</dict>
 	<dict>
+		<key>title</key>
+		<string>Delete Feed</string>
 		<key>key</key>
 		<string>[deletefunction]</string>
 		<key>action</key>
@@ -84,7 +92,7 @@
 	</dict>
 	<dict>
 		<key>title</key>
-		<string>Expand Selected Row</string>
+		<string>Expand Selected</string>
 		<key>key</key>
 		<string>[rightarrow]</string>
 		<key>action</key>
@@ -94,7 +102,7 @@
 	</dict>
 	<dict>
 		<key>title</key>
-		<string>Collapse Selected Row</string>
+		<string>Collapse Selected</string>
 		<key>key</key>
 		<string>[leftarrow]</string>
 		<key>action</key>
