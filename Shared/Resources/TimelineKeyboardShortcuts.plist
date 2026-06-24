@@ -4,7 +4,7 @@
 <array>
 	<dict>
 		<key>title</key>
-		<string>Select Next Up</string>
+		<string>Select Previous Article</string>
 		<key>key</key>
 		<string>[uparrow]</string>
 		<key>action</key>
@@ -12,7 +12,7 @@
 	</dict>
 	<dict>
 		<key>title</key>
-		<string>Select Next Down</string>
+		<string>Select Next Article</string>
 		<key>key</key>
 		<string>[downarrow]</string>
 		<key>action</key>
@@ -20,7 +20,7 @@
 	</dict>
 	<dict>
 		<key>title</key>
-		<string>Navigate to Feeds</string>
+		<string>Go to Feeds</string>
 		<key>key</key>
 		<string>[leftarrow]</string>
 		<key>action</key>
@@ -28,7 +28,7 @@
 	</dict>
 	<dict>
 		<key>title</key>
-		<string>Navigate to Detail</string>
+		<string>Go to Article</string>
 		<key>key</key>
 		<string>[rightarrow]</string>
 		<key>action</key>
