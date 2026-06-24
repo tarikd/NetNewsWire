@@ -8,6 +8,7 @@ A fork of NetNewsWire that adds Reeder-style reading to the macOS app. Major fea
 - **Swipe to open / return.** A right-to-left swipe on the article opens its link in the web view; a left-to-right swipe returns to the article.
 - **Offline Reader View.** Full-text extraction runs entirely on-device with Mozilla Readability — no API keys and no hosted parser, so Reader View works in any build. It strips page chrome (consent banners, navigation, modals), has per-site rules for tricky sites, and reuses the app's logged-in session so it can pull full articles from sites you're signed into.
 - **Browser layout fixes.** Pages render with the standard browser user agent so they fit the panel, and the web view never resizes the window.
+- **Customizable keyboard shortcuts.** A Keyboard pane in Settings lets you remap the reading and navigation shortcuts, grouped into Everywhere / Sidebar / Timeline / Article tabs. Record a shortcut by pressing the keys, clear it, or restore the defaults; conflicts are detected (including across contexts, since "Everywhere" shortcuts take priority) with a small warning and an automatic reassign. Includes a Reader View toggle and a working "Go to Previous Unread".
 
 **Accounts:** this fork works with **local feeds (On My Mac)**, **Feedbin** (paid, the easiest to set up), or **FreshRSS** (free, self-hosted). Services that need private API keys (Feedly, Inoreader) and iCloud sync aren't available in this build, since those keys and signing entitlements aren't part of the open-source project.
 
