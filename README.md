@@ -9,6 +9,8 @@ A fork of NetNewsWire that adds Reeder-style reading to the macOS app. Major fea
 - **Offline Reader View.** Full-text extraction runs entirely on-device with Mozilla Readability — no API keys and no hosted parser, so Reader View works in any build. It strips page chrome (consent banners, navigation, modals), has per-site rules for tricky sites, and reuses the app's logged-in session so it can pull full articles from sites you're signed into.
 - **Browser layout fixes.** Pages render with the standard browser user agent so they fit the panel, and the web view never resizes the window.
 
+**Accounts:** this fork works with **local feeds (On My Mac)**, **Feedbin** (paid, the easiest to set up), or **FreshRSS** (free, self-hosted). Services that need private API keys (Feedly, Inoreader) and iCloud sync aren't available in this build, since those keys and signing entitlements aren't part of the open-source project.
+
 Everything below is the upstream NetNewsWire README.
 
 ---
