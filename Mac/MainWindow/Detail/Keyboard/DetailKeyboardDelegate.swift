@@ -11,18 +11,6 @@ import RSCore
 
 @objc final class DetailKeyboardDelegate: NSObject, KeyboardDelegate {
 
-	let shortcuts: Set<KeyboardShortcut>
-
-	override init() {
-
-		let f = Bundle.main.path(forResource: "DetailKeyboardShortcuts", ofType: "plist")!
-		let rawShortcuts = NSArray(contentsOfFile: f)! as! [[String: Any]]
-
-		self.shortcuts = Set(rawShortcuts.compactMap { KeyboardShortcut(dictionary: $0) })
-
-		super.init()
-	}
-
 	func keydown(_ event: NSEvent, in view: NSView) -> Bool {
 
 		if MainWindowKeyboardHandler.shared.keydown(event, in: view) {
@@ -30,6 +18,7 @@ import RSCore
 		}
 
 		let key = KeyboardKey(with: event)
+		let shortcuts = KeyboardShortcutStore.shared.effectiveShortcuts(for: .detail)
 		guard let matchingShortcut = KeyboardShortcut.findMatchingShortcut(in: shortcuts, key: key) else {
 			return false
 		}
