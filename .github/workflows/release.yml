@@ -273,8 +273,17 @@ jobs:
         run: |
           set -euo pipefail
           DMG="${{ steps.dmg.outputs.path }}"
-          GEN=$(find build/SourcePackages/artifacts -type f -name generate_appcast -path "*/bin/*" | head -1)
-          if [ -z "$GEN" ]; then echo "generate_appcast not found under build/SourcePackages"; exit 1; fi
+
+          # The Sparkle binary package embedded in the app doesn't ship the bin/
+          # tools, so fetch Sparkle's official distribution for generate_appcast.
+          # The EdDSA format is stable across 2.x, so it matches the key we use.
+          SPARKLE_VERSION=2.6.4
+          curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir -p "$RUNNER_TEMP/sparkle-tools"
+          tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle-tools"
+          GEN=$(find "$RUNNER_TEMP/sparkle-tools" -type f -name generate_appcast | head -1)
+          if [ -z "$GEN" ]; then echo "generate_appcast not found in Sparkle tools"; exit 1; fi
 
           # generate_appcast reads each archive's version from the app bundle it
           # mounts, signs it with the EdDSA key (from stdin), and writes
