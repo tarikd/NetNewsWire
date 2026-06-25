@@ -117,6 +117,47 @@ jobs:
             | xcbeautify --renderer github-actions
           echo "APP_PATH=build/Build/Products/Release/NetNewsWire.app" >> "$GITHUB_ENV"
 
+      - name: Re-sign Sparkle helpers for notarization
+        if: env.SIGNED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release/NetNewsWire.app"
+          ID="$SIGN_IDENTITY"
+          # The project's Sparkle signing phase preserves the helpers' shipped
+          # entitlements (which include get-task-allow) and can't reach the
+          # Downloader entitlements file in this fork. Re-sign every nested
+          # Sparkle binary inside-out with the hardened runtime and a secure
+          # timestamp, without preserving entitlements, so get-task-allow is
+          # dropped. NetNewsWire isn't sandboxed, so the helpers need none.
+          resign() { codesign --force --options runtime --timestamp --sign "$ID" "$1"; }
+
+          # Inner Updater.app bundles (sign their executables, then the bundle).
+          find "$APP" -name "Updater.app" -type d | while read -r u; do
+            find "$u/Contents/MacOS" -type f -exec codesign --force --options runtime --timestamp --sign "$ID" {} \;
+            resign "$u"
+          done
+
+          # Autoupdate helper executables.
+          find "$APP" -name "Autoupdate" -type f -exec codesign --force --options runtime --timestamp --sign "$ID" {} \;
+
+          # XPC services: inner executables first, then the bundle.
+          find "$APP" -name "*.xpc" -type d | while read -r x; do
+            find "$x/Contents/MacOS" -type f -exec codesign --force --options runtime --timestamp --sign "$ID" {} \;
+            resign "$x"
+          done
+
+          # Sparkle framework itself.
+          if [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]; then
+            resign "$APP/Contents/Frameworks/Sparkle.framework"
+          fi
+
+          # Re-seal the app. Its own entitlements are already a clean Developer ID
+          # set (no get-task-allow), so preserve them.
+          codesign --force --options runtime --timestamp --preserve-metadata=entitlements --sign "$ID" "$APP"
+
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
       - name: Build (ad-hoc, unsigned fallback)
         if: env.SIGNED != 'true'
         shell: bash
