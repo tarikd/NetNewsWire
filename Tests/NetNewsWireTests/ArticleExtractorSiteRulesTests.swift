@@ -17,6 +17,14 @@ final class ArticleExtractorSiteRulesTests: XCTestCase {
 		XCTAssertEqual(ArticleExtractor.siteContentSelector(forHost: "www.mediapart.fr"), ".news__body__center__article")
 	}
 
+	func testArsTechnicaWhitelistsPostContentAndStripsInBodyJunk() {
+		XCTAssertEqual(ArticleExtractor.siteContentSelector(forHost: "arstechnica.com"), ".post-content")
+		let junk = ArticleExtractor.siteJunkSelectors(forHost: "www.arstechnica.com")
+		XCTAssertTrue(junk.contains(".ars-interlude-container"))
+		XCTAssertTrue(junk.contains(".ad"))
+		XCTAssertTrue(junk.contains(".post-navigation"))
+	}
+
 	func testUnknownHostHasNoSiteRules() {
 		XCTAssertTrue(ArticleExtractor.siteJunkSelectors(forHost: "www.yabiladi.com").isEmpty)
 		XCTAssertNil(ArticleExtractor.siteContentSelector(forHost: "www.yabiladi.com"))

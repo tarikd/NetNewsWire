@@ -150,6 +150,11 @@ public enum ArticleExtractorState: Sendable {
 		if host == "lemonde.fr" || host.hasSuffix(".lemonde.fr") {
 			return [".ds-header", ".ds-burger-popin", ".ds-footer"]
 		}
+		if host == "arstechnica.com" || host.hasSuffix(".arstechnica.com") {
+			// Ars buries ads, a newsletter "interlude", a sign-in overlay, and the
+			// previous/next-story navigation inside its .post-content article body.
+			return [".ad", ".ad-wrapper", ".ars-interlude-container", ".sign-in-panel", ".post-navigation"]
+		}
 		return []
 	}
 
@@ -167,6 +172,13 @@ public enum ArticleExtractorState: Sendable {
 			// Mediapart names the article body `paywall-restricted-content`, which the
 			// generic paywall junk rule would otherwise strip. Whitelist it directly.
 			return ".news__body__center__article"
+		}
+		if host == "arstechnica.com" || host.hasSuffix(".arstechnica.com") {
+			// Ars splits a multi-page article into one .post-content block per page,
+			// all inside the main <article>. Matching every block (and concatenating
+			// them) reassembles the whole story while dropping the comment picks,
+			// related cards, and rail ads around it.
+			return ".post-content"
 		}
 		return nil
 	}
@@ -187,14 +199,28 @@ public enum ArticleExtractorState: Sendable {
 			function hasContent(article) {
 				return !!(article && article.content && article.textContent && article.textContent.trim().length > 0);
 			}
+			function stripJunk(doc) {
+				if (!JUNK.length) { return; }
+				try {
+					doc.querySelectorAll(JUNK.join(",")).forEach(function(node) {
+						if (node && node.parentNode) { node.parentNode.removeChild(node); }
+					});
+				} catch (selectorError) { /* a bad selector shouldn't abort extraction */ }
+			}
 
 			try {
-				// 1. Whitelist: isolate the known article container.
+				// 1. Whitelist: isolate the known article container(s), then strip the
+				// junk (ads, newsletters) that sits inside. Some sites (e.g. Ars Technica)
+				// split one article across several matching containers — one per page — so
+				// concatenate every match, not just the first.
 				if (CONTENT) {
-					var node = document.querySelector(CONTENT);
-					if (node) {
+					var nodes = document.querySelectorAll(CONTENT);
+					if (nodes.length) {
+						var html = "";
+						nodes.forEach(function(node) { html += node.outerHTML; });
 						var isolated = document.cloneNode(true);
-						isolated.body.innerHTML = node.outerHTML;
+						isolated.body.innerHTML = html;
+						stripJunk(isolated);
 						var whitelisted = parse(isolated);
 						if (hasContent(whitelisted)) { return JSON.stringify(whitelisted); }
 					}
@@ -202,11 +228,7 @@ public enum ArticleExtractorState: Sendable {
 
 				// 2. Blocklist: strip junk and let Readability score the rest.
 				var cleaned = document.cloneNode(true);
-				try {
-					cleaned.querySelectorAll(JUNK.join(",")).forEach(function(node) {
-						if (node && node.parentNode) { node.parentNode.removeChild(node); }
-					});
-				} catch (selectorError) { /* a bad selector shouldn't abort extraction */ }
+				stripJunk(cleaned);
 				var article = parse(cleaned);
 				if (hasContent(article)) { return JSON.stringify(article); }
 
