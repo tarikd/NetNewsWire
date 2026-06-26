@@ -199,8 +199,7 @@ private final class FlippedView: NSView {
 		return result
 	}
 
-	private func makeRow(for command: KeyboardShortcutStore.Command,
-						 in context: KeyboardShortcutStore.Context) -> NSView {
+	private func makeRow(for command: KeyboardShortcutStore.Command, in context: KeyboardShortcutStore.Context) -> NSView {
 		let titleLabel = NSTextField(labelWithString: command.title)
 		titleLabel.lineBreakMode = .byTruncatingTail
 		titleLabel.translatesAutoresizingMaskIntoConstraints = false

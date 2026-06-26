@@ -13,11 +13,11 @@ final class ArticleExtractorSiteRulesTests: XCTestCase {
 		XCTAssertNotNil(ArticleExtractor.siteContentSelector(forHost: "lemonde.fr"))
 	}
 
-	func testMediapartWhitelistsArticleContainer() {
+	func testMediapartIsolatesArticleContainer() {
 		XCTAssertEqual(ArticleExtractor.siteContentSelector(forHost: "www.mediapart.fr"), ".news__body__center__article")
 	}
 
-	func testArsTechnicaWhitelistsPostContentAndStripsInBodyJunk() {
+	func testArsTechnicaIsolatesPostContentAndStripsInBodyJunk() {
 		XCTAssertEqual(ArticleExtractor.siteContentSelector(forHost: "arstechnica.com"), ".post-content")
 		let junk = ArticleExtractor.siteJunkSelectors(forHost: "www.arstechnica.com")
 		XCTAssertTrue(junk.contains(".ars-interlude-container"))
