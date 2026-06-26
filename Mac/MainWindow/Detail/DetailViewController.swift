@@ -23,6 +23,7 @@ enum DetailState: Equatable {
 @MainActor protocol DetailViewControllerDelegate: AnyObject {
 	func detailViewController(_: DetailViewController, didRequestInAppBrowserFor url: URL)
 	func detailViewControllerDidRequestArticle(_: DetailViewController)
+	func detailViewController(_: DetailViewController, didRequestReaderView enabled: Bool)
 }
 
 final class DetailViewController: NSViewController, WKUIDelegate {
@@ -46,6 +47,14 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 	private var swipeAccumX: CGFloat = 0
 	private var swipeAccumY: CGFloat = 0
 	private static let swipeHorizontalThreshold: CGFloat = 60
+
+	// Pinch-to-toggle Reader View. A trackpad pinch arrives as .magnify events;
+	// accumulate the magnification and fire once it clearly crosses a threshold —
+	// pinch open (zoom in) enters Reader View, pinch closed (zoom out) leaves it.
+	private var magnifyTracking = false
+	private var magnifyFired = false
+	private var magnifyAccum: CGFloat = 0
+	private static let readerViewMagnificationThreshold: CGFloat = 0.3
 
 	weak var delegate: DetailViewControllerDelegate?
 
@@ -96,7 +105,7 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 	override func viewDidAppear() {
 		super.viewDidAppear()
 		if swipeEventMonitor == nil {
-			swipeEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.swipe, .scrollWheel]) { [weak self] event in
+			swipeEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.swipe, .scrollWheel, .magnify]) { [weak self] event in
 				self?.handleSwipeEvent(event) ?? event
 			}
 		}
@@ -239,9 +248,43 @@ private extension DetailViewController {
 			return performSwipe(deltaX: event.deltaX) ? nil : event
 		case .scrollWheel:
 			return handleScrollSwipe(event)
+		case .magnify:
+			return handleMagnify(event)
 		default:
 			return event
 		}
+	}
+
+	/// A trackpad pinch toggles Reader View: pinch open (positive magnification)
+	/// enters it, pinch closed (negative) leaves it. Fires once per gesture.
+	func handleMagnify(_ event: NSEvent) -> NSEvent? {
+		// Pinch only acts on an article, never the in-app browser.
+		guard !isShowingBrowser else {
+			return event
+		}
+
+		switch event.phase {
+		case .began:
+			magnifyTracking = true
+			magnifyFired = false
+			magnifyAccum = 0
+		case .changed:
+			guard magnifyTracking, !magnifyFired else {
+				break
+			}
+			magnifyAccum += event.magnification
+			if abs(magnifyAccum) > Self.readerViewMagnificationThreshold {
+				delegate?.detailViewController(self, didRequestReaderView: magnifyAccum > 0)
+				magnifyFired = true
+				magnifyTracking = false
+				return nil
+			}
+		case .ended, .cancelled:
+			magnifyTracking = false
+		default:
+			break
+		}
+		return event
 	}
 
 	/// Two-finger swipe-navigation arrives as a scroll gesture; accumulate the

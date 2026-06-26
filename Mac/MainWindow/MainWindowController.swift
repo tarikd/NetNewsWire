@@ -1621,6 +1621,22 @@ extension MainWindowController: DetailViewControllerDelegate {
 	func detailViewControllerDidRequestArticle(_ controller: DetailViewController) {
 		closeInAppBrowser()
 	}
+
+	func detailViewController(_ controller: DetailViewController, didRequestReaderView enabled: Bool) {
+		// Only meaningful when a single article with a link is selected.
+		guard currentLink != nil, oneSelectedArticle != nil else {
+			return
+		}
+		// Don't interrupt an in-progress extraction.
+		guard articleExtractor?.state != .processing else {
+			return
+		}
+		// Already in the requested state — nothing to do.
+		guard isShowingExtractedArticle != enabled else {
+			return
+		}
+		toggleArticleExtractor(nil)
+	}
 }
 
 private extension MainWindowController {
