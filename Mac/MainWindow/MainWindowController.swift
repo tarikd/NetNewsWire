@@ -49,6 +49,9 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 	private var detailViewController: DetailViewController?
 	private var mainToolbar: NSToolbar?
 	private var browserToolbar: NSToolbar?
+	private var markAllAsReadToastPanel: NSPanel?
+	private var markAllAsReadConfirmHandler: (() -> Void)?
+	private var markAllAsReadToastClickMonitor: Any?
 	private var wasSidebarCollapsed = false
 	private lazy var browserTitleField: NSTextField = {
 		let field = NSTextField(labelWithString: "")
@@ -440,7 +443,12 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 	}
 
 	@IBAction func markAllAsRead(_ sender: Any?) {
-		currentTimelineViewController?.markAllAsRead()
+		guard let timeline = currentTimelineViewController, timeline.canMarkAllAsRead() else {
+			return
+		}
+		confirmMarkAllAsRead {
+			timeline.markAllAsRead()
+		}
 	}
 
 	@IBAction func toggleRead(_ sender: Any?) {
@@ -501,8 +509,13 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 	}
 
 	@IBAction func markAllAsReadAndGoToNextUnread(_ sender: Any?) {
-		currentTimelineViewController?.markAllAsRead {
-			self.nextUnread(sender)
+		guard let timeline = currentTimelineViewController, timeline.canMarkAllAsRead() else {
+			return
+		}
+		confirmMarkAllAsRead {
+			timeline.markAllAsRead {
+				self.nextUnread(sender)
+			}
 		}
 	}
 
@@ -687,6 +700,17 @@ extension MainWindowController: SidebarDelegate {
 	func sidebarInvalidatedRestorationState(_: SidebarViewController) {
 		Self.logger.debug("MainWindowController: sidebarInvalidatedRestorationState")
 		invalidateRestorableState()
+	}
+
+	func sidebarConfirmMarkAllAsRead(_: SidebarViewController, confirmed: @escaping () -> Void) {
+		confirmMarkAllAsRead(confirmed)
+	}
+
+	func sidebarDidChangeReadFilter(_: SidebarViewController, unreadOnly: Bool) {
+		// Keep the article list's read filter in step with the sidebar's.
+		if let current = timelineContainerViewController?.isReadFiltered, current != unreadOnly {
+			timelineContainerViewController?.toggleReadFilter()
+		}
 	}
 }
 
@@ -1631,5 +1655,178 @@ private extension MainWindowController {
 		sidebarSplitViewItem?.animator().isCollapsed = wasSidebarCollapsed
 		makeToolbarValidate()
 		updateWindowTitle()   // restore the feed name + unread count
+	}
+}
+
+// MARK: - Mark All as Read confirmation
+
+extension MainWindowController {
+
+	/// Drops a small toast — Cancel and Mark All as Read — down from the top,
+	/// floating over the toolbar above the timeline column. Runs `onConfirm` only
+	/// if the user chooses Mark All as Read.
+	func confirmMarkAllAsRead(_ onConfirm: @escaping () -> Void) {
+		// Already confirming: ignore.
+		guard markAllAsReadToastPanel == nil else {
+			return
+		}
+		guard let window = window, let columnView = timelineContainerViewController?.view else {
+			onConfirm()
+			return
+		}
+
+		let height: CGFloat = 44
+		// Match the sidebar island's inset from the window edges.
+		let margin: CGFloat = 8
+
+		// Span (almost) the full timeline-column width, anchored to the column and
+		// centered over the toolbar above it.
+		// Resolve the timeline pane's on-screen rect from the split view (index 1:
+		// sidebar, timeline, detail).
+		let timelinePane = splitViewController?.splitView.arrangedSubviews.dropFirst().first ?? columnView
+		let columnInScreen = window.convertToScreen(timelinePane.convert(timelinePane.bounds, to: nil))
+		// The sidebar is an overlay, so the timeline pane reports the window's left
+		// edge; the visible timeline runs from the sidebar's right edge to the
+		// detail pane's left edge. Sit the toast in the toolbar band at the top.
+		let panes = splitViewController?.splitView.arrangedSubviews ?? []
+		let visibleLeft: CGFloat
+		let visibleRight: CGFloat
+		if panes.count >= 3 {
+			visibleLeft = window.convertToScreen(panes[0].convert(panes[0].bounds, to: nil)).maxX
+			visibleRight = window.convertToScreen(panes[2].convert(panes[2].bounds, to: nil)).minX
+		} else {
+			visibleLeft = columnInScreen.minX
+			visibleRight = columnInScreen.maxX
+		}
+		let width = max(visibleRight - visibleLeft - margin * 2, 160)
+		// Align the toast's top with the sidebar island's top edge.
+		let islandTop: CGFloat
+		if let sb = sidebarViewController?.view {
+			islandTop = window.convertToScreen(sb.convert(sb.bounds, to: nil)).maxY
+		} else {
+			islandTop = window.frame.maxY - margin
+		}
+		let restingFrame = NSRect(x: visibleLeft + margin,
+								  y: islandTop - height,
+								  width: width, height: height)
+
+		let cornerRadius: CGFloat = 11
+		let size = restingFrame.size
+
+		let cancelButton = NSButton(title: NSLocalizedString("Cancel", comment: "Cancel"), target: self, action: #selector(cancelMarkAllAsReadToast(_:)))
+		cancelButton.bezelStyle = .rounded
+		cancelButton.controlSize = .large
+		let confirmTitle = NSLocalizedString("Mark All as Read", comment: "Mark All as Read")
+		let confirmButton = NSButton(title: confirmTitle, target: self, action: #selector(performMarkAllAsReadToast(_:)))
+		confirmButton.bezelStyle = .rounded
+		confirmButton.controlSize = .large
+		confirmButton.keyEquivalent = "\r"
+		confirmButton.attributedTitle = NSAttributedString(string: confirmTitle, attributes: [
+			.foregroundColor: NSColor.systemRed,
+			.font: NSFont.systemFont(ofSize: NSFont.systemFontSize(for: .large))
+		])
+
+		let stack = NSStackView(views: [cancelButton, confirmButton])
+		stack.orientation = .horizontal
+		stack.distribution = .fillEqually
+		stack.spacing = 8
+		stack.edgeInsets = NSEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
+		stack.translatesAutoresizingMaskIntoConstraints = false
+
+		func pinStack(to host: NSView) {
+			host.addSubview(stack)
+			NSLayoutConstraint.activate([
+				stack.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+				stack.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+				stack.topAnchor.constraint(equalTo: host.topAnchor),
+				stack.bottomAnchor.constraint(equalTo: host.bottomAnchor)
+			])
+		}
+
+		// A visual-effect view adapts to light/dark mode automatically, unlike a
+		// CALayer background color, which is captured once and never re-resolved.
+		let bar = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
+		bar.material = .popover
+		bar.blendingMode = .behindWindow
+		bar.state = .active
+		bar.wantsLayer = true
+		bar.layer?.cornerRadius = cornerRadius
+		bar.layer?.masksToBounds = true
+		pinStack(to: bar)
+
+		let panel = NSPanel(contentRect: restingFrame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+		panel.isOpaque = false
+		panel.backgroundColor = .clear
+		panel.hasShadow = false
+		panel.isMovable = false
+		panel.contentView = bar
+
+		panel.setFrame(restingFrame.offsetBy(dx: 0, dy: 12), display: false)
+		panel.alphaValue = 0
+		window.addChildWindow(panel, ordered: .above)
+
+		markAllAsReadToastPanel = panel
+		markAllAsReadConfirmHandler = onConfirm
+
+		// A click anywhere outside the toast cancels it.
+		markAllAsReadToastClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+			guard let self, let panel = self.markAllAsReadToastPanel else {
+				return event
+			}
+			if event.window != panel {
+				self.dismissMarkAllAsReadToast(confirmed: false)
+			}
+			return event
+		}
+
+		NSAnimationContext.runAnimationGroup { context in
+			context.duration = 0.2
+			panel.animator().alphaValue = 1
+			panel.animator().setFrame(restingFrame, display: true)
+		}
+	}
+
+	@objc func cancelMarkAllAsReadToast(_ sender: Any?) {
+		dismissMarkAllAsReadToast(confirmed: false)
+	}
+
+	@objc func performMarkAllAsReadToast(_ sender: Any?) {
+		dismissMarkAllAsReadToast(confirmed: true)
+	}
+
+	private func dismissMarkAllAsReadToast(confirmed: Bool) {
+		guard let panel = markAllAsReadToastPanel else {
+			return
+		}
+		let handler = markAllAsReadConfirmHandler
+		markAllAsReadConfirmHandler = nil
+
+		if let monitor = markAllAsReadToastClickMonitor {
+			NSEvent.removeMonitor(monitor)
+			markAllAsReadToastClickMonitor = nil
+		}
+
+		NSAnimationContext.runAnimationGroup({ context in
+			context.duration = 0.15
+			panel.animator().alphaValue = 0
+			panel.animator().setFrame(panel.frame.offsetBy(dx: 0, dy: 12), display: true)
+		}, completionHandler: { [weak self] in
+			MainActor.assumeIsolated {
+				self?.cleanupMarkAllAsReadToast()
+			}
+		})
+
+		if confirmed {
+			handler?()
+		}
+	}
+
+	private func cleanupMarkAllAsReadToast() {
+		guard let panel = markAllAsReadToastPanel else {
+			return
+		}
+		markAllAsReadToastPanel = nil
+		window?.removeChildWindow(panel)
+		panel.orderOut(nil)
 	}
 }

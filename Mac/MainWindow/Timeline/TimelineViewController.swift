@@ -269,6 +269,21 @@ final class TimelineViewController: NSViewController, UndoableCommandRunner, Unr
 		runCommand(markReadCommand)
 	}
 
+	/// Slides a confirmation banner down over the top of the timeline column and
+	/// runs `onConfirm` only if the user chooses to proceed. Callers should make
+	/// sure there is something to mark before calling this, so the banner never
+	/// appears with nothing to confirm.
+	/// Asks the window controller to show the mark-all-as-read confirmation (a
+	/// toolbar swap over the timeline region) and run `onConfirm` only if the
+	/// user proceeds. Callers should make sure there is something to mark.
+	func confirmMarkAllAsRead(_ onConfirm: @escaping () -> Void) {
+		guard let windowController = view.window?.windowController as? MainWindowController else {
+			onConfirm()
+			return
+		}
+		windowController.confirmMarkAllAsRead(onConfirm)
+	}
+
 	func canMarkAllAsRead() -> Bool {
 		return articles.canMarkAllAsRead()
 	}

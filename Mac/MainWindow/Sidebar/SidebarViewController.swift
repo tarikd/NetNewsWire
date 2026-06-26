@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import SwiftUI
 import RSTree
 import Articles
 import Account
@@ -21,11 +22,15 @@ extension Notification.Name {
 	func sidebarSelectionDidChange(_: SidebarViewController, selectedObjects: [AnyObject]?)
 	func unreadCount(for: AnyObject) -> Int
 	func sidebarInvalidatedRestorationState(_: SidebarViewController)
+	func sidebarConfirmMarkAllAsRead(_: SidebarViewController, confirmed: @escaping () -> Void)
+	func sidebarDidChangeReadFilter(_: SidebarViewController, unreadOnly: Bool)
 }
 
 @objc final class SidebarViewController: NSViewController, NSOutlineViewDelegate, NSMenuDelegate, UndoableCommandRunner {
 
 	@IBOutlet var outlineView: NSOutlineView!
+
+	private let filterModel = SidebarFilterModel()
 
 	weak var delegate: SidebarDelegate?
 
@@ -52,6 +57,7 @@ extension Notification.Name {
 		}
 		set {
 			treeControllerDelegate.isReadFiltered = newValue
+			filterModel.hideReadFeeds = newValue
 		}
 	}
 	var expandedTable = Set<ContainerIdentifier>()
@@ -99,6 +105,48 @@ extension Notification.Name {
 		}
 		expandNodes()
 		prefetchFeedIcons()
+
+		setUpFilterControl()
+	}
+
+	private static let filterFooterHeight: CGFloat = 77
+
+	private func setUpFilterControl() {
+		filterModel.hideReadFeeds = isReadFiltered
+		filterModel.onUserChange = { [weak self] hideReadFeeds in
+			guard let self else { return }
+			self.setReadFiltered(hideReadFeeds)
+			self.delegate?.sidebarDidChangeReadFilter(self, unreadOnly: hideReadFeeds)
+		}
+
+		// Shrink the feed list's scroll view so it ends above the bottom band.
+		// Rows are then clipped at that edge — they disappear as they scroll into
+		// the toggle area, rather than showing through behind the pill.
+		if let scrollView = outlineView.enclosingScrollView {
+			scrollView.borderType = .noBorder
+			scrollView.translatesAutoresizingMaskIntoConstraints = false
+			NSLayoutConstraint.activate([
+				scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+				scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+				scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+				scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -Self.filterFooterHeight)
+			])
+		}
+
+		let hostingView = NSHostingView(rootView: SidebarFilterView(model: filterModel))
+		hostingView.translatesAutoresizingMaskIntoConstraints = false
+		view.addSubview(hostingView)
+		NSLayoutConstraint.activate([
+			hostingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+			hostingView.centerYAnchor.constraint(equalTo: view.bottomAnchor, constant: -Self.filterFooterHeight / 2)
+		])
+	}
+
+	private func setReadFiltered(_ hideReadFeeds: Bool) {
+		guard isReadFiltered != hideReadFeeds else { return }
+		isReadFiltered = hideReadFeeds
+		delegate?.sidebarInvalidatedRestorationState(self)
+		rebuildTreeAndRestoreSelection()
 	}
 
 	// MARK: State Restoration
