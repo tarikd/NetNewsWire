@@ -26,6 +26,9 @@ jobs:
         uses: actions/checkout@v5
         with:
           submodules: recursive
+          # Full history + tags so the appcast changelog can diff against the
+          # previous version tag.
+          fetch-depth: 0
 
       - name: Generate Secrets Sources
         run: PROJECT_DIR="$GITHUB_WORKSPACE" ./buildscripts/updateSecrets.sh
@@ -297,6 +300,44 @@ jobs:
             --download-url-prefix "$PREFIX" \
             --link "https://github.com/${{ github.repository }}" \
             "$WORK"
+
+          # Build an HTML changelog from the commits since the previous version
+          # tag and embed it in the appcast item, so Sparkle shows it in the
+          # update dialog before the user downloads.
+          CURRENT="${{ github.ref_name }}"
+          PREV="$(git describe --tags --abbrev=0 --match 'v*' "${CURRENT}^" 2>/dev/null || true)"
+          if [ -n "$PREV" ]; then
+            RANGE="${PREV}..${CURRENT}"
+          else
+            RANGE="$CURRENT"
+          fi
+          NOTES_FILE="$RUNNER_TEMP/release-notes.html"
+          {
+            echo "<h2>Changes in ${CURRENT#v}</h2>"
+            echo "<ul>"
+            git log --no-merges --pretty=format:'%s' "$RANGE" | while IFS= read -r subject || [ -n "$subject" ]; do
+              [ -n "$subject" ] || continue
+              esc=$(printf '%s' "$subject" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+              echo "<li>${esc}</li>"
+            done
+            echo "</ul>"
+          } > "$NOTES_FILE"
+          echo "=== release notes ==="
+          cat "$NOTES_FILE"
+
+          # Inject the notes as a <description> CDATA block before the (single)
+          # enclosure element.
+          awk -v notes="$NOTES_FILE" '
+            /<enclosure/ && !done {
+              print "            <description><![CDATA["
+              while ((getline line < notes) > 0) print line
+              close(notes)
+              print "]]></description>"
+              done = 1
+            }
+            { print }
+          ' "$WORK/appcast.xml" > "$WORK/appcast.with-notes.xml"
+          mv "$WORK/appcast.with-notes.xml" "$WORK/appcast.xml"
 
           cp "$WORK/appcast.xml" appcast.xml
           echo "=== appcast.xml ==="
