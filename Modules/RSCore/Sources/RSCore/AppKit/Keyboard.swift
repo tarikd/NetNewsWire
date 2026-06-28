@@ -77,6 +77,12 @@ public struct KeyboardKey: Hashable, Sendable {
 		return !shiftKeyDown && !optionKeyDown && !commandKeyDown && !controlKeyDown
 	}
 
+	/// True for the up/down/left/right arrow keys.
+	public var isArrowKey: Bool {
+		integerValue == NSUpArrowFunctionKey || integerValue == NSDownArrowFunctionKey
+			|| integerValue == NSLeftArrowFunctionKey || integerValue == NSRightArrowFunctionKey
+	}
+
 	public init(integerValue: Int, shiftKeyDown: Bool, optionKeyDown: Bool, commandKeyDown: Bool, controlKeyDown: Bool) {
 		self.integerValue = integerValue
 

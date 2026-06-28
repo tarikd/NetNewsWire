@@ -411,6 +411,26 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 		}
 	}
 
+	// Forward article navigation to the timeline even when it isn't the first
+	// responder (e.g. right after picking a feed, while the sidebar has focus).
+	// TimelineViewController also implements these, so when the timeline has focus
+	// it handles the shortcut directly and this never runs.
+	@IBAction func selectNextDown(_ sender: Any?) {
+		guard let timelineViewController = currentTimelineViewController else {
+			return
+		}
+		timelineViewController.selectNextDown(sender)
+		timelineViewController.focus()
+	}
+
+	@IBAction func selectNextUp(_ sender: Any?) {
+		guard let timelineViewController = currentTimelineViewController else {
+			return
+		}
+		timelineViewController.selectNextUp(sender)
+		timelineViewController.focus()
+	}
+
 	@IBAction func nextUnread(_ sender: Any?) {
 		guard let timelineViewController = currentTimelineViewController, let sidebarViewController = sidebarViewController else {
 			return

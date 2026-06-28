@@ -21,11 +21,23 @@ import RSCore
 
 		let key = KeyboardKey(with: event)
 		let shortcuts = KeyboardShortcutStore.shared.effectiveShortcuts(for: .sidebar)
-		guard let matchingShortcut = KeyboardShortcut.findMatchingShortcut(in: shortcuts, key: key) else {
-			return false
+		if let matchingShortcut = KeyboardShortcut.findMatchingShortcut(in: shortcuts, key: key) {
+			matchingShortcut.perform(with: view)
+			return true
 		}
 
-		matchingShortcut.perform(with: view)
-		return true
+		// Fall through to article-list (Timeline) shortcuts so commands like
+		// "Select Next Article" work right after picking a feed, while the sidebar
+		// still has focus. Skip the arrow keys, which drive the sidebar's own
+		// (native) feed navigation.
+		if !key.isArrowKey {
+			let timelineShortcuts = KeyboardShortcutStore.shared.effectiveShortcuts(for: .timeline)
+			if let matchingShortcut = KeyboardShortcut.findMatchingShortcut(in: timelineShortcuts, key: key) {
+				matchingShortcut.perform(with: view)
+				return true
+			}
+		}
+
+		return false
 	}
 }
