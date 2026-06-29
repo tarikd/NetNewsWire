@@ -33,8 +33,30 @@ final class SidebarStatusBarView: NSView {
 			progressLabel.font = NSFont.monospacedDigitSystemFont(ofSize: progressLabelFontSize, weight: NSFont.Weight.regular)
 			progressLabel.stringValue = ""
 
+			centerProgressViews()
+
 			NotificationCenter.default.addObserver(self, selector: #selector(progressInfoDidChange(_:)), name: .progressInfoDidChange, object: CombinedRefreshProgress.shared)
 		}
+	}
+
+	/// The storyboard left-aligns the progress bar + label (pinned 20pt from the
+	/// leading edge). Re-parent them into a centered stack so they line up under
+	/// the centered filter toggle. Re-parenting drops the old edge constraints
+	/// automatically, so there's no constraint conflict to break the layout.
+	private func centerProgressViews() {
+		progressIndicator.removeFromSuperview()
+		progressLabel.removeFromSuperview()
+
+		let stackView = NSStackView(views: [progressIndicator, progressLabel])
+		stackView.orientation = .horizontal
+		stackView.spacing = 4
+		stackView.translatesAutoresizingMaskIntoConstraints = false
+		addSubview(stackView)
+
+		NSLayoutConstraint.activate([
+			stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
+			stackView.centerYAnchor.constraint(equalTo: centerYAnchor)
+		])
 	}
 
 	@objc func updateUI() {

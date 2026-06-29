@@ -109,7 +109,11 @@ extension Notification.Name {
 		setUpFilterControl()
 	}
 
-	private static let filterFooterHeight: CGFloat = 77
+	private static let filterTopGap: CGFloat = 16
+	private static let filterBottomGap: CGFloat = 28
+	// Resting distance of the pill above the sidebar bottom when idle, so it clears
+	// the rounded corner instead of being clipped at the very edge.
+	private static let filterIdleBottomMargin: CGFloat = 24
 
 	private func setUpFilterControl() {
 		filterModel.hideReadFeeds = isReadFiltered
@@ -119,9 +123,44 @@ extension Notification.Name {
 			self.delegate?.sidebarDidChangeReadFilter(self, unreadOnly: hideReadFeeds)
 		}
 
-		// Shrink the feed list's scroll view so it ends above the bottom band.
-		// Rows are then clipped at that edge — they disappear as they scroll into
-		// the toggle area, rather than showing through behind the pill.
+		let statusBarView = view.subviews.first { $0 is SidebarStatusBarView }
+
+		// The storyboard pins the refresh status bar's top to the scroll view's
+		// bottom. We re-anchor both around the filter pill below, so remove that link
+		// first — otherwise it forms a layout loop (scrollView → pill → statusBar →
+		// scrollView) that corrupts the pill's frame and breaks its hit-testing.
+		if let statusBarView, let scrollView = outlineView.enclosingScrollView {
+			for constraint in view.constraints {
+				let linksStatusBarTopToScrollBottom =
+					(constraint.firstItem === statusBarView && constraint.firstAttribute == .top
+					 && constraint.secondItem === scrollView && constraint.secondAttribute == .bottom)
+					|| (constraint.firstItem === scrollView && constraint.firstAttribute == .bottom
+						&& constraint.secondItem === statusBarView && constraint.secondAttribute == .top)
+				if linksStatusBarTopToScrollBottom {
+					constraint.isActive = false
+				}
+			}
+		}
+
+		let hostingView = NSHostingView(rootView: SidebarFilterView(model: filterModel))
+		hostingView.translatesAutoresizingMaskIntoConstraints = false
+		view.addSubview(hostingView)
+
+		// Rest above the rounded corner when idle (low priority), but never overlap
+		// the refresh status bar — when it appears, the required upper bound pushes
+		// the pill up so the progress shows below it.
+		let pillCeilingAnchor = statusBarView?.topAnchor ?? view.bottomAnchor
+		let restingConstraint = hostingView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -Self.filterIdleBottomMargin)
+		restingConstraint.priority = .defaultLow
+
+		NSLayoutConstraint.activate([
+			hostingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+			hostingView.bottomAnchor.constraint(lessThanOrEqualTo: pillCeilingAnchor, constant: -Self.filterBottomGap),
+			restingConstraint
+		])
+
+		// Shrink the feed list's scroll view so it ends above the pill, following it
+		// as the status bar pushes it up.
 		if let scrollView = outlineView.enclosingScrollView {
 			scrollView.borderType = .noBorder
 			scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -129,17 +168,9 @@ extension Notification.Name {
 				scrollView.topAnchor.constraint(equalTo: view.topAnchor),
 				scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
 				scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-				scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -Self.filterFooterHeight)
+				scrollView.bottomAnchor.constraint(equalTo: hostingView.topAnchor, constant: -Self.filterTopGap)
 			])
 		}
-
-		let hostingView = NSHostingView(rootView: SidebarFilterView(model: filterModel))
-		hostingView.translatesAutoresizingMaskIntoConstraints = false
-		view.addSubview(hostingView)
-		NSLayoutConstraint.activate([
-			hostingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-			hostingView.centerYAnchor.constraint(equalTo: view.bottomAnchor, constant: -Self.filterFooterHeight / 2)
-		])
 	}
 
 	private func setReadFiltered(_ hideReadFeeds: Bool) {
